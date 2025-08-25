@@ -113,14 +113,44 @@ export default function App() {
   };
 
   const renderMessageContent = (content: string) => {
-    // Remove code blocks from the main chat and show only text content
-    const textOnly = content.replace(/```[\w]*\n?[\s\S]*?```/g, '[Code snippet moved to sidebar]');
+    // Split content by code blocks and render them inline like ChatGPT/Claude
+    const parts = content.split(/(```[\w]*\n?[\s\S]*?```)/g);
     
-    return (
-      <span className="whitespace-pre-wrap">
-        {textOnly}
-      </span>
-    );
+    return parts.map((part, index) => {
+      const codeMatch = part.match(/```(\w+)?\n?([\s\S]*?)```/);
+      if (codeMatch) {
+        const language = codeMatch[1] || 'plaintext';
+        const code = codeMatch[2].trim();
+        
+        return (
+          <div key={index} className="my-4 bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
+            <div className="flex justify-between items-center px-4 py-2 bg-[#161b22] border-b border-gray-700">
+              <span className="text-sm text-gray-300 font-mono">{language}</span>
+              <button
+                onClick={() => copyToClipboard(`inline-${index}`, code)}
+                className="text-gray-400 hover:text-white transition-colors p-1.5 rounded hover:bg-gray-700"
+                title="Copy code"
+              >
+                {copiedSnippets.has(`inline-${index}`) ? (
+                  <Check size={14} className="text-green-400" />
+                ) : (
+                  <Copy size={14} />
+                )}
+              </button>
+            </div>
+            <pre className="p-4 text-sm text-gray-100 overflow-x-auto font-mono leading-relaxed">
+              <code className={`language-${language}`}>{code}</code>
+            </pre>
+          </div>
+        );
+      }
+      
+      return (
+        <span key={index} className="whitespace-pre-wrap leading-relaxed">
+          {part}
+        </span>
+      );
+    });
   };
 
   const handleSendMessage = async () => {
@@ -231,29 +261,41 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Pollinations AI</h1>
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-sm">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            Pollinations AI
+          </h1>
           {codeSnippets.length > 0 && (
             <button
               onClick={() => setIsCodeSidebarOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-white font-medium"
+              className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-lg transition-all duration-200 text-white font-medium shadow-lg hover:shadow-blue-500/25"
             >
               <Code size={18} />
-              <span className="hidden sm:inline">View Code</span>
-              <span className="bg-blue-800 px-2 py-1 rounded-full text-xs">{codeSnippets.length}</span>
+              <span className="hidden sm:inline">Code Snippets</span>
+              <div className="bg-blue-400 px-2 py-0.5 rounded-full text-xs font-bold min-w-[20px] h-5 flex items-center justify-center">
+                {codeSnippets.length}
+              </div>
             </button>
           )}
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gradient-to-b from-gray-950 to-gray-900">
           <div className="w-full max-w-4xl mx-auto space-y-6">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 p-8">
-                <h3 className="text-2xl font-semibold mb-2">
-                  How can I help you today?
+              <div className="text-center text-gray-500 p-12">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
+                  <Code size={32} className="text-white" />
+                </div>
+                <h3 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                  Ready to Code?
                 </h3>
-                <p>Choose a framework and type your prompt below to get started.</p>
+                <p className="text-lg text-gray-400 mb-6">Choose a framework and describe what you want to build.</p>
+                <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto">
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">React Components</span>
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">HTML Templates</span>
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">Python Scripts</span>
+                </div>
               </div>
             )}
             {messages.map((msg, i) => (
@@ -264,20 +306,24 @@ export default function App() {
                 }`}
               >
                 <div
-                  className={`max-w-[85%] p-4 rounded-xl shadow-lg transition-colors duration-200 ${
+                  className={`max-w-[90%] p-5 rounded-2xl shadow-lg transition-colors duration-200 ${
                     msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-none"
-                      : "bg-gray-800 text-gray-100 rounded-bl-none"
+                      ? "bg-blue-600 text-white rounded-br-sm"
+                      : "bg-gray-800 text-gray-100 rounded-bl-sm border border-gray-700"
                   }`}
                 >
-                  <div className="prose prose-invert max-w-none">
+                  <div className="prose prose-invert max-w-none prose-pre:bg-transparent prose-pre:p-0 prose-code:text-gray-100">
                     {msg.role === "assistant" ? renderMessageContent(msg.content) : (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     )}
                     {msg.role === "assistant" &&
                       isLoading &&
                       i === messages.length - 1 && (
-                        <span className="inline-block w-2 h-5 bg-blue-500 ml-1 animate-pulse" />
+                        <span className="inline-flex items-center gap-1 ml-2">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                        </span>
                       )}
                   </div>
                 </div>
@@ -375,68 +421,69 @@ export default function App() {
 
       {/* Code Snippets Sidebar */}
       {isCodeSidebarOpen && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-gray-900 border-l border-gray-800 flex flex-col z-50 shadow-2xl">
-          <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-800">
+        <div className="fixed inset-y-0 right-0 w-96 bg-gray-900 border-l border-gray-700 flex flex-col z-50 shadow-2xl">
+          <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gradient-to-r from-gray-800 to-gray-700">
             <h3 className="text-lg font-semibold flex items-center gap-2 text-white">
               <Code size={20} className="text-blue-400" />
-              Code Snippets
+              Code Repository
             </h3>
             <button
               onClick={() => setIsCodeSidebarOpen(false)}
-              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-700 transition-colors"
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-600 transition-colors"
             >
               <X size={20} />
             </button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-950">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-950">
             {codeSnippets.length === 0 ? (
               <div className="text-center py-12">
-                <Code size={48} className="text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg font-medium mb-2">No code snippets yet</p>
-                <p className="text-gray-600 text-sm">Ask for code examples and they'll appear here!</p>
+                <div className="w-16 h-16 bg-gray-800 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                  <Code size={32} className="text-gray-600" />
+                </div>
+                <p className="text-gray-500 text-lg font-medium mb-2">No code yet</p>
+                <p className="text-gray-600 text-sm">Code snippets will appear here as you chat!</p>
               </div>
             ) : (
               codeSnippets.map((snippet, index) => (
-                <div key={snippet.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-lg">
-                  <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-b border-gray-700">
+                <div key={snippet.id} className="bg-gray-800 rounded-lg border border-gray-600 overflow-hidden hover:border-blue-500/50 transition-colors group">
+                  <div className="flex items-center justify-between p-3 bg-gray-700/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded flex items-center justify-center">
                         <span className="text-white text-xs font-bold">{index + 1}</span>
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-white">
-                          {snippet.title || `${snippet.language.charAt(0).toUpperCase() + snippet.language.slice(1)} Code`}
+                        <h4 className="text-sm font-medium text-white">
+                          {snippet.language.charAt(0).toUpperCase() + snippet.language.slice(1)}
                         </h4>
-                        <p className="text-xs text-blue-300 bg-blue-900/30 px-2 py-1 rounded mt-1 inline-block">
-                          {snippet.language.toUpperCase()}
-                        </p>
+                        <p className="text-xs text-gray-400">{snippet.code.split('\n').length} lines</p>
                       </div>
                     </div>
                     <button
                       onClick={() => copyToClipboard(snippet.id, snippet.code)}
-                      className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-700 transition-all duration-200 flex items-center gap-2"
+                      className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-600 transition-all duration-200 flex items-center gap-1.5 opacity-0 group-hover:opacity-100"
                       title="Copy to clipboard"
                     >
                       {copiedSnippets.has(snippet.id) ? (
                         <>
-                          <Check size={16} className="text-green-400" />
-                          <span className="text-xs text-green-400">Copied!</span>
+                          <Check size={14} className="text-green-400" />
+                          <span className="text-xs text-green-400">✓</span>
                         </>
                       ) : (
                         <>
-                          <Copy size={16} />
-                          <span className="text-xs hidden sm:inline">Copy</span>
+                          <Copy size={14} />
                         </>
                       )}
                     </button>
                   </div>
                   <div className="relative">
-                    <pre className="p-4 text-sm text-gray-100 overflow-x-auto bg-gray-900 max-h-80">
-                      <code className="language-{snippet.language}">{snippet.code}</code>
+                    <pre className="p-3 text-xs text-gray-100 overflow-x-auto bg-[#0d1117] max-h-48 font-mono">
+                      <code>{snippet.code}</code>
                     </pre>
-                    <div className="absolute top-2 right-2 bg-gray-800/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400">
-                      {snippet.code.split('\n').length} lines
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="bg-gray-800/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400 font-mono">
+                        {snippet.language}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -445,17 +492,25 @@ export default function App() {
           </div>
           
           {codeSnippets.length > 0 && (
-            <div className="p-4 border-t border-gray-800 bg-gray-800">
-              <button
-                onClick={() => {
-                  const allCode = codeSnippets.map(s => `// ${s.title}\n${s.code}`).join('\n\n');
-                  copyToClipboard('all-snippets', allCode);
-                }}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
-              >
-                <Copy size={16} />
-                Copy All Snippets
-              </button>
+            <div className="p-4 border-t border-gray-700 bg-gray-800">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const allCode = codeSnippets.map((s, i) => `// Snippet ${i + 1}: ${s.language}\n${s.code}`).join('\n\n// ' + '='.repeat(50) + '\n\n');
+                    copyToClipboard('all-snippets', allCode);
+                  }}
+                  className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium text-sm"
+                >
+                  <Copy size={14} />
+                  Copy All
+                </button>
+                <button
+                  onClick={() => setCodeSnippets([])}
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           )}
         </div>
