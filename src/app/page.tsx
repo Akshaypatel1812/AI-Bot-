@@ -386,8 +386,10 @@ export default function ChatInterface() {
         }`}
       >
         {" "}
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-          <h1 className="text-xl font-bold">AI Chat Interface</h1>
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center sticky top-0 z-10 bg-gray-950/80 backdrop-blur-md">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            AI Chatbot
+          </h1>
           <button
             onClick={() => {
               setMessages([]);
@@ -403,7 +405,7 @@ export default function ChatInterface() {
         <div className="flex-1 overflow-y-auto p-4">
           <div className="max-w-4xl mx-auto space-y-6">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 p-8">
+              <div className="text-center text-gray-300 p-8">
                 <h3 className="text-2xl font-semibold mb-2">
                   How can I help you today?
                 </h3>
@@ -535,7 +537,8 @@ export default function ChatInterface() {
       </main>
 
       {isSidebarOpen && getCurrentCodeBlock() && (
-        <div className="flex flex-col border-l border-gray-800 bg-gray-900 transition-all duration-300 w-1/2">
+        <div className="flex flex-col border-l border-gray-700/50 bg-gray-900/80 backdrop-blur-xl transition-all duration-300 w-1/2">
+          {" "}
           <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-800">
             <h3 className="text-lg font-semibold flex items-center gap-2 text-white">
               <Code size={20} className="text-blue-400" />
@@ -557,7 +560,6 @@ export default function ChatInterface() {
               <X size={20} />
             </button>
           </div>
-
           <div className="flex border-b border-gray-800 bg-gray-800">
             <button
               onClick={() => setActiveTab("code")}
@@ -582,7 +584,6 @@ export default function ChatInterface() {
               Preview
             </button>
           </div>
-
           <div className="flex-1 overflow-hidden">
             {activeTab === "code" ? (
               <div className="h-full overflow-y-auto p-4 bg-gray-950">
