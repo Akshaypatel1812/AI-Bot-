@@ -1,110 +1,68 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check, Code, X } from "lucide-react";
+import { Copy, Check, Code, X, Play, FileText } from "lucide-react";
+import CodePreview from "../components/CodePreview";
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  codeBlocks?: CodeBlock[];
 };
 
-type CodeSnippet = {
+type CodeBlock = {
   id: string;
   language: string;
   code: string;
-  title?: string;
+  title: string;
+  messageIndex: number;
+  blockIndex: number;
+  isStreaming?: boolean;
 };
 
-export default function App() {
+type SidebarTab = "code" | "preview";
+
+export default function ChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [framework, setFramework] = useState("html-css-tailwind");
-  const [codeSnippets, setCodeSnippets] = useState<CodeSnippet[]>([]);
-  const [isCodeSidebarOpen, setIsCodeSidebarOpen] = useState(false);
+  const [framework, setFramework] = useState("react");
+  const [selectedCodeBlock, setSelectedCodeBlock] = useState<CodeBlock | null>(
+    null
+  );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<SidebarTab>("code");
   const [copiedSnippets, setCopiedSnippets] = useState<Set<string>>(new Set());
+  const [streamingCodeBlock, setStreamingCodeBlock] =
+    useState<CodeBlock | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  console.log(messages, "MESSAGES");
 
   const frameworkOptions = [
-    { value: "html-css-tailwind", label: "HTML + CSS + Tailwind" },
-    { value: "html-css-bootstrap", label: "HTML + CSS + Bootstrap" },
+    { value: "html-css-tailwind", label: "HTML + CSS + TAILWIND" },
+    { value: "html-css-bootstrap", label: "HTML + CSS + BOOTSTRAP" },
     { value: "react", label: "React" },
-    { value: "react-tailwind", label: "React + Tailwind" },
     { value: "vue", label: "Vue.js" },
     { value: "angular", label: "Angular" },
     { value: "svelte", label: "Svelte" },
-    { value: "javascript", label: "Vanilla JavaScript" },
-    { value: "typescript", label: "TypeScript" },
-    { value: "python", label: "Python" },
-    { value: "node", label: "Node.js" },
-    { value: "php", label: "PHP" },
   ];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Extract code blocks from message content
-  const extractCodeSnippets = (content: string, messageIndex: number) => {
-    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
-    const snippets: CodeSnippet[] = [];
-    let match;
-    let blockIndex = 0;
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-      const language = match[1] || 'text';
-      const code = match[2].trim();
-      
-      if (code) {
-        snippets.push({
-          id: `msg-${messageIndex}-block-${blockIndex}`,
-          language,
-          code,
-          title: `${language.charAt(0).toUpperCase() + language.slice(1)} Code Block ${blockIndex + 1}`
-        });
-        blockIndex++;
-      }
-    }
-
-    return snippets;
-  };
-
-  // Update code snippets whenever messages change
-  useEffect(() => {
-    const allSnippets: CodeSnippet[] = [];
-    messages.forEach((msg, index) => {
-      if (msg.role === 'assistant') {
-        const snippets = extractCodeSnippets(msg.content, index);
-        allSnippets.push(...snippets);
-      }
-    });
-    setCodeSnippets(allSnippets);
-  }, [messages]);
-
-  const copyToClipboard = async (snippetId: string, code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopiedSnippets(prev => new Set(prev).add(snippetId));
-      setTimeout(() => {
-        setCopiedSnippets(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(snippetId);
-          return newSet;
-        });
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to copy code:', err);
-    }
-  };
-
   const parseStreamChunk = (line: string): string => {
     try {
-      if (!line.trim()) return "";
+      if (!line.trim() || line === "data: [DONE]") return "";
+
       if (line.startsWith("data: ")) {
         const jsonStr = line.slice(6).trim();
         if (jsonStr === "[DONE]") return "";
         const parsed = JSON.parse(jsonStr);
         return parsed.choices?.[0]?.delta?.content || "";
       }
+
       const parsed = JSON.parse(line);
       return parsed.choices?.[0]?.delta?.content || "";
     } catch {
@@ -112,49 +70,186 @@ export default function App() {
     }
   };
 
-  const renderMessageContent = (content: string) => {
-    // Split content by code blocks and render them inline like ChatGPT/Claude
-    const parts = content.split(/(```[\w]*\n?[\s\S]*?```)/g);
-    
-    return parts.map((part, index) => {
-      const codeMatch = part.match(/```(\w+)?\n?([\s\S]*?)```/);
-      if (codeMatch) {
-        const language = codeMatch[1] || 'plaintext';
-        const code = codeMatch[2].trim();
-        
-        return (
-          <div key={index} className="my-4 bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
-            <div className="flex justify-between items-center px-4 py-2 bg-[#161b22] border-b border-gray-700">
-              <span className="text-sm text-gray-300 font-mono">{language}</span>
-              <button
-                onClick={() => copyToClipboard(`inline-${index}`, code)}
-                className="text-gray-400 hover:text-white transition-colors p-1.5 rounded hover:bg-gray-700"
-                title="Copy code"
-              >
-                {copiedSnippets.has(`inline-${index}`) ? (
-                  <Check size={14} className="text-green-400" />
-                ) : (
-                  <Copy size={14} />
-                )}
-              </button>
-            </div>
-            <pre className="p-4 text-sm text-gray-100 overflow-x-auto font-mono leading-relaxed">
-              <code className={`language-${language}`}>{code}</code>
-            </pre>
-          </div>
-        );
+  const processStreamingContent = (
+    fullContent: string,
+    messageIndex: number,
+    isStreaming: boolean = false
+  ): {
+    processedContent: string;
+    codeBlocks: CodeBlock[];
+    currentStreamingBlock: CodeBlock | null;
+  } => {
+    const lines = fullContent.split("\n");
+    let processedContent = "";
+    const codeBlocks: CodeBlock[] = [];
+    let currentStreamingBlock: CodeBlock | null = null;
+
+    let inCodeBlock = false;
+    let currentLanguage = "";
+    let currentCode = "";
+    let blockIndex = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.startsWith("```") && !inCodeBlock) {
+        inCodeBlock = true;
+        currentLanguage = line.slice(3).trim() || "text";
+        currentCode = "";
+
+        const newBlock: CodeBlock = {
+          id: `msg-${messageIndex}-block-${blockIndex}`,
+          language: currentLanguage,
+          code: "",
+          title: `${
+            currentLanguage.charAt(0).toUpperCase() + currentLanguage.slice(1)
+          } Code`,
+          messageIndex,
+          blockIndex,
+          isStreaming: true,
+        };
+
+        if (isStreaming) {
+          currentStreamingBlock = newBlock;
+          if (!isSidebarOpen) {
+            setIsSidebarOpen(true);
+            setActiveTab("code");
+          }
+        }
+
+        processedContent += `__CODE_PLACEHOLDER_${newBlock.id}__`;
+        blockIndex++;
+        continue;
       }
-      
-      return (
-        <span key={index} className="whitespace-pre-wrap leading-relaxed">
-          {part}
-        </span>
-      );
-    });
+
+      if (line.startsWith("```") && inCodeBlock) {
+        inCodeBlock = false;
+
+        const codeBlock: CodeBlock = {
+          id: `msg-${messageIndex}-block-${blockIndex - 1}`,
+          language: currentLanguage,
+          code: currentCode.trim(),
+          title: `${
+            currentLanguage.charAt(0).toUpperCase() + currentLanguage.slice(1)
+          } Code`,
+          messageIndex,
+          blockIndex: blockIndex - 1,
+          isStreaming: false,
+        };
+
+        codeBlocks.push(codeBlock);
+
+        if (
+          currentStreamingBlock &&
+          currentStreamingBlock.id === codeBlock.id
+        ) {
+          currentStreamingBlock = { ...codeBlock, isStreaming: false };
+        }
+
+        continue;
+      }
+
+      if (inCodeBlock) {
+        if (currentCode !== "") currentCode += "\n";
+        currentCode += line;
+
+        if (currentStreamingBlock) {
+          currentStreamingBlock = {
+            ...currentStreamingBlock,
+            code: currentCode,
+          };
+        }
+      } else {
+        processedContent += line;
+        if (i < lines.length - 1) processedContent += "\n";
+      }
+    }
+
+    if (inCodeBlock && currentStreamingBlock) {
+      currentStreamingBlock.code = currentCode;
+    }
+
+    return { processedContent, codeBlocks, currentStreamingBlock };
+  };
+
+  const copyToClipboard = async (snippetId: string, code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedSnippets((prev) => new Set(prev).add(snippetId));
+      setTimeout(() => {
+        setCopiedSnippets((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(snippetId);
+          return newSet;
+        });
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
+  };
+
+  useEffect(() => {
+    const codeToPreview = streamingCodeBlock || selectedCodeBlock;
+    if (
+      activeTab === "preview" &&
+      codeToPreview &&
+      iframeRef.current &&
+      codeToPreview.code.trim()
+    ) {
+      const blob = new Blob([codeToPreview.code], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      iframeRef.current.src = url;
+
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [streamingCodeBlock, selectedCodeBlock, activeTab]);
+
+  const renderMessageContent = (message: ChatMessage) => {
+    const content = message.content;
+    const codeBlocks = message.codeBlocks || [];
+
+    const parts = content.split(/(__CODE_PLACEHOLDER_[^_]+__)/);
+
+    return (
+      <div className="whitespace-pre-wrap">
+        {parts.map((part, index) => {
+          if (part.startsWith("__CODE_PLACEHOLDER_") && part.endsWith("__")) {
+            const blockId = part
+              .replace("__CODE_PLACEHOLDER_", "")
+              .replace("__", "");
+            const codeBlock = codeBlocks.find((block) => block.id === blockId);
+
+            if (codeBlock) {
+              return (
+                <div key={index} className="my-4">
+                  <div className="inline-flex items-center gap-2 px-3 py-2 bg-gray-700 rounded-lg text-sm">
+                    <Code size={16} className="text-blue-400" />
+                    <span className="text-gray-300">
+                      {codeBlock.language.toUpperCase()} code generated
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedCodeBlock(codeBlock);
+                        setIsSidebarOpen(true);
+                        setActiveTab("code");
+                      }}
+                      className="ml-2 text-blue-400 hover:text-blue-300 text-xs underline"
+                    >
+                      View
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+          }
+          return <span key={index}>{part}</span>;
+        })}
+      </div>
+    );
   };
 
   const handleSendMessage = async () => {
-    if (input.trim() === "") return;
+    if (input.trim() === "" || isLoading) return;
 
     const userMessage: ChatMessage = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -164,8 +259,13 @@ export default function App() {
     if (textarea) (textarea as HTMLTextAreaElement).style.height = "auto";
 
     setIsLoading(true);
+    const messageIndex = messages.length + 1;
 
-    const assistantMessage: ChatMessage = { role: "assistant", content: "" };
+    const assistantMessage: ChatMessage = {
+      role: "assistant",
+      content: "",
+      codeBlocks: [],
+    };
     setMessages((prev) => [...prev, assistantMessage]);
 
     try {
@@ -174,7 +274,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [...messages, userMessage],
-          framework,
+          language: framework,
         }),
       });
 
@@ -185,6 +285,7 @@ export default function App() {
       if (!reader) throw new Error("No response body reader available");
 
       let buffer = "";
+      let fullContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -198,14 +299,28 @@ export default function App() {
         for (const line of lines) {
           const deltaContent = parseStreamChunk(line);
           if (deltaContent) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
+            fullContent += deltaContent;
+
+            const { processedContent, codeBlocks, currentStreamingBlock } =
+              processStreamingContent(fullContent, messageIndex, true);
+
+            if (currentStreamingBlock) {
+              setStreamingCodeBlock(currentStreamingBlock);
+              if (!selectedCodeBlock) {
+                setSelectedCodeBlock(currentStreamingBlock);
+              }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
             setMessages((prev) => {
               const newMessages = [...prev];
-              const last = newMessages[newMessages.length - 1];
-              if (last?.role === "assistant") {
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage?.role === "assistant") {
                 newMessages[newMessages.length - 1] = {
-                  ...last,
-                  content: last.content + deltaContent,
+                  ...lastMessage,
+                  content: processedContent,
+                  codeBlocks: codeBlocks,
                 };
               }
               return newMessages;
@@ -217,19 +332,31 @@ export default function App() {
       if (buffer.trim()) {
         const deltaContent = parseStreamChunk(buffer);
         if (deltaContent) {
+          fullContent += deltaContent;
+          const { processedContent, codeBlocks, currentStreamingBlock } =
+            processStreamingContent(fullContent, messageIndex, false);
+
+          if (currentStreamingBlock) {
+            setStreamingCodeBlock(null);
+            setSelectedCodeBlock(currentStreamingBlock);
+          }
+
           setMessages((prev) => {
             const newMessages = [...prev];
-            const last = newMessages[newMessages.length - 1];
-            if (last?.role === "assistant") {
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage?.role === "assistant") {
               newMessages[newMessages.length - 1] = {
-                ...last,
-                content: last.content + deltaContent,
+                ...lastMessage,
+                content: processedContent,
+                codeBlocks: codeBlocks,
               };
             }
             return newMessages;
           });
         }
       }
+
+      setStreamingCodeBlock(null);
     } catch (err) {
       console.error("Error fetching AI response:", err);
       setMessages((prev) => {
@@ -240,64 +367,50 @@ export default function App() {
         }
         return newMessages;
       });
+      setStreamingCodeBlock(null);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const getCurrentCodeBlock = () => {
+    return streamingCodeBlock || selectedCodeBlock;
+  };
+
   return (
     <div className="flex h-screen bg-gray-950 text-gray-100 font-sans">
-      {/* Main Chat Sidebar */}
-      <aside className="w-64 p-4 border-r border-gray-800 hidden lg:block">
-        <h2 className="text-xl font-bold mb-4 text-blue-500">Chats</h2>
-        <button
-          onClick={() => setMessages([])}
-          className="w-full text-left p-2 rounded-lg hover:bg-gray-900 transition-colors"
-        >
-          New Chat
-        </button>
-      </aside>
-
       {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-sm">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Pollinations AI
-          </h1>
-          {codeSnippets.length > 0 && (
-            <button
-              onClick={() => setIsCodeSidebarOpen(true)}
-              className="relative flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-lg transition-all duration-200 text-white font-medium shadow-lg hover:shadow-blue-500/25"
-            >
-              <Code size={18} />
-              <span className="hidden sm:inline">Code Snippets</span>
-              <div className="bg-blue-400 px-2 py-0.5 rounded-full text-xs font-bold min-w-[20px] h-5 flex items-center justify-center">
-                {codeSnippets.length}
-              </div>
-            </button>
-          )}
+      <main
+        className={`flex flex-col transition-all duration-300 ${
+          isSidebarOpen ? "w-1/2" : "w-full"
+        }`}
+      >
+        {" "}
+        <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+          <h1 className="text-xl font-bold">AI Chat Interface</h1>
+          <button
+            onClick={() => {
+              setMessages([]);
+              setIsSidebarOpen(false);
+              setSelectedCodeBlock(null);
+              setStreamingCodeBlock(null);
+            }}
+            className="px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-sm"
+          >
+            New Chat
+          </button>
         </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gradient-to-b from-gray-950 to-gray-900">
-          <div className="w-full max-w-4xl mx-auto space-y-6">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-4xl mx-auto space-y-6">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 p-12">
-                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
-                  <Code size={32} className="text-white" />
-                </div>
-                <h3 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                  Ready to Code?
+              <div className="text-center text-gray-500 p-8">
+                <h3 className="text-2xl font-semibold mb-2">
+                  How can I help you today?
                 </h3>
-                <p className="text-lg text-gray-400 mb-6">Choose a framework and describe what you want to build.</p>
-                <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto">
-                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">React Components</span>
-                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">HTML Templates</span>
-                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-gray-300">Python Scripts</span>
-                </div>
+                <p>Choose a framework and start chatting.</p>
               </div>
             )}
+
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -306,222 +419,229 @@ export default function App() {
                 }`}
               >
                 <div
-                  className={`max-w-[90%] p-5 rounded-2xl shadow-lg transition-colors duration-200 ${
+                  className={`max-w-[85%] p-4 rounded-xl shadow-lg ${
                     msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-gray-800 text-gray-100 rounded-bl-sm border border-gray-700"
+                      ? "bg-blue-600 text-white rounded-br-none"
+                      : "bg-gray-800 text-gray-100 rounded-bl-none"
                   }`}
                 >
-                  <div className="prose prose-invert max-w-none prose-pre:bg-transparent prose-pre:p-0 prose-code:text-gray-100">
-                    {msg.role === "assistant" ? renderMessageContent(msg.content) : (
-                      <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    )}
-                    {msg.role === "assistant" &&
-                      isLoading &&
-                      i === messages.length - 1 && (
-                        <span className="inline-flex items-center gap-1 ml-2">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  {msg.role === "assistant" ? (
+                    <div className="whitespace-pre-wrap">
+                      {isLoading && i === messages.length - 1 ? (
+                        <span className="ml-2 text-blue-400 animate-pulse">
+                          Generating...
                         </span>
+                      ) : (
+                        renderMessageContent(msg)
                       )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  )}
+
+                  {msg.role === "assistant" &&
+                    isLoading &&
+                    i === messages.length - 1 && (
+                      <span className="inline-block w-2 h-5 bg-blue-500 ml-1 animate-pulse" />
+                    )}
                 </div>
               </div>
             ))}
             <div ref={messagesEndRef} />
           </div>
         </div>
+        <div className="p-4 border-t border-gray-800">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Framework/Technology:
+              </label>
+              <select
+                value={framework}
+                onChange={(e) => setFramework(e.target.value)}
+                className="w-full p-3 bg-gray-800 text-gray-100 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {frameworkOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {/* Enhanced Input Section */}
-        <div className="p-4 md:p-6 border-t border-gray-800 w-full max-w-4xl mx-auto">
-          {/* Framework Selector */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Framework/Technology:
-            </label>
-            <select
-              value={framework}
-              onChange={(e) => setFramework(e.target.value)}
-              className="w-full p-3 bg-gray-800 text-gray-100 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {frameworkOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Input Area */}
-          <div className="flex items-end bg-gray-800 border border-gray-700 rounded-lg p-3 gap-3 shadow-lg">
-            <textarea
-              className="flex-1 p-3 bg-gray-900 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-y-auto min-h-[50px] placeholder-gray-400"
-              placeholder={`Ask me to create something with ${frameworkOptions.find(f => f.value === framework)?.label}...`}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = "auto";
-                target.style.height = Math.min(target.scrollHeight, 200) + "px";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              rows={1}
-              style={{ maxHeight: "200px" }}
-            />
-
-            <button
-              onClick={handleSendMessage}
-              disabled={!input.trim() || isLoading}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg transition-colors disabled:cursor-not-allowed flex items-center gap-2 font-medium"
-            >
-              {isLoading ? (
-                <svg
-                  className="animate-spin h-5 w-5"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-              ) : (
-                <>
-                  <span className="hidden sm:inline">Send</span>
+            <div className="flex items-end bg-gray-800 border border-gray-700 rounded-lg p-3 gap-3">
+              <textarea
+                className="flex-1 p-3 bg-gray-900 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[50px] max-h-[200px] placeholder-gray-400"
+                placeholder={`Ask me to create something with ${
+                  frameworkOptions.find((f) => f.value === framework)?.label
+                }...`}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = "auto";
+                  target.style.height =
+                    Math.min(target.scrollHeight, 200) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                rows={1}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!input.trim() || isLoading}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg transition-colors disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+              >
+                {isLoading ? (
                   <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="currentColor"
+                    className="animate-spin h-5 w-5"
+                    fill="none"
                     viewBox="0 0 24 24"
                   >
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
                   </svg>
-                </>
-              )}
-            </button>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">Send</span>
+                    <svg
+                      className="h-5 w-5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Code Snippets Sidebar */}
-      {isCodeSidebarOpen && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-gray-900 border-l border-gray-700 flex flex-col z-50 shadow-2xl">
-          <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gradient-to-r from-gray-800 to-gray-700">
+      {isSidebarOpen && getCurrentCodeBlock() && (
+        <div className="flex flex-col border-l border-gray-800 bg-gray-900 transition-all duration-300 w-1/2">
+          <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-800">
             <h3 className="text-lg font-semibold flex items-center gap-2 text-white">
               <Code size={20} className="text-blue-400" />
-              Code Repository
+              {getCurrentCodeBlock()?.title}
+              {streamingCodeBlock && (
+                <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-1 rounded animate-pulse">
+                  Streaming...
+                </span>
+              )}
             </h3>
             <button
-              onClick={() => setIsCodeSidebarOpen(false)}
-              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-600 transition-colors"
+              onClick={() => {
+                setIsSidebarOpen(false);
+                setSelectedCodeBlock(null);
+                setStreamingCodeBlock(null);
+              }}
+              className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-700 transition-colors"
             >
               <X size={20} />
             </button>
           </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-950">
-            {codeSnippets.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-800 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                  <Code size={32} className="text-gray-600" />
-                </div>
-                <p className="text-gray-500 text-lg font-medium mb-2">No code yet</p>
-                <p className="text-gray-600 text-sm">Code snippets will appear here as you chat!</p>
-              </div>
-            ) : (
-              codeSnippets.map((snippet, index) => (
-                <div key={snippet.id} className="bg-gray-800 rounded-lg border border-gray-600 overflow-hidden hover:border-blue-500/50 transition-colors group">
-                  <div className="flex items-center justify-between p-3 bg-gray-700/50">
+
+          <div className="flex border-b border-gray-800 bg-gray-800">
+            <button
+              onClick={() => setActiveTab("code")}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === "code"
+                  ? "text-blue-400 border-b-2 border-blue-400 bg-gray-900"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <FileText size={16} />
+              Code
+            </button>
+            <button
+              onClick={() => setActiveTab("preview")}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === "preview"
+                  ? "text-blue-400 border-b-2 border-blue-400 bg-gray-900"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Play size={16} />
+              Preview
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            {activeTab === "code" ? (
+              <div className="h-full overflow-y-auto p-4 bg-gray-950">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                  <div className="flex items-center justify-between p-4 bg-gray-700 border-b border-gray-600">
                     <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">{index + 1}</span>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-white">
-                          {snippet.language.charAt(0).toUpperCase() + snippet.language.slice(1)}
-                        </h4>
-                        <p className="text-xs text-gray-400">{snippet.code.split('\n').length} lines</p>
-                      </div>
+                      <span className="text-xs font-medium text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
+                        {getCurrentCodeBlock()?.language.toUpperCase()}
+                      </span>
+                      <span className="text-sm text-gray-300">
+                        {getCurrentCodeBlock()?.code.split("\n").length || 0}{" "}
+                        lines
+                      </span>
                     </div>
                     <button
-                      onClick={() => copyToClipboard(snippet.id, snippet.code)}
-                      className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-600 transition-all duration-200 flex items-center gap-1.5 opacity-0 group-hover:opacity-100"
-                      title="Copy to clipboard"
+                      onClick={() => {
+                        const currentBlock = getCurrentCodeBlock();
+                        if (currentBlock) {
+                          copyToClipboard(currentBlock.id, currentBlock.code);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-3 py-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded-lg transition-all duration-200"
                     >
-                      {copiedSnippets.has(snippet.id) ? (
+                      {getCurrentCodeBlock() &&
+                      copiedSnippets.has(getCurrentCodeBlock()!.id) ? (
                         <>
-                          <Check size={14} className="text-green-400" />
-                          <span className="text-xs text-green-400">✓</span>
+                          <Check size={16} className="text-green-400" />
+                          <span className="text-xs text-green-400">
+                            Copied!
+                          </span>
                         </>
                       ) : (
                         <>
-                          <Copy size={14} />
+                          <Copy size={16} />
+                          <span className="text-xs">Copy</span>
                         </>
                       )}
                     </button>
                   </div>
-                  <div className="relative">
-                    <pre className="p-3 text-xs text-gray-100 overflow-x-auto bg-[#0d1117] max-h-48 font-mono">
-                      <code>{snippet.code}</code>
-                    </pre>
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="bg-gray-800/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-400 font-mono">
-                        {snippet.language}
-                      </span>
-                    </div>
-                  </div>
+                  <pre className="p-4 text-sm text-gray-100 overflow-x-auto bg-gray-900 max-h-full relative">
+                    <code>{getCurrentCodeBlock()?.code || ""}</code>
+                    {streamingCodeBlock && (
+                      <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse" />
+                    )}
+                  </pre>
                 </div>
-              ))
+              </div>
+            ) : (
+              <div className="h-full bg-white">
+                {getCurrentCodeBlock() && (
+                  <CodePreview
+                    code={getCurrentCodeBlock()!.code}
+                    framework={getCurrentCodeBlock()!.language}
+                  />
+                )}
+              </div>
             )}
           </div>
-          
-          {codeSnippets.length > 0 && (
-            <div className="p-4 border-t border-gray-700 bg-gray-800">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const allCode = codeSnippets.map((s, i) => `// Snippet ${i + 1}: ${s.language}\n${s.code}`).join('\n\n// ' + '='.repeat(50) + '\n\n');
-                    copyToClipboard('all-snippets', allCode);
-                  }}
-                  className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-medium text-sm"
-                >
-                  <Copy size={14} />
-                  Copy All
-                </button>
-                <button
-                  onClick={() => setCodeSnippets([])}
-                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
         </div>
-      )}
-
-      {/* Backdrop for mobile */}
-      {isCodeSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setIsCodeSidebarOpen(false)}
-        />
       )}
     </div>
   );
