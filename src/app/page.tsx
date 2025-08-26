@@ -44,7 +44,7 @@ export default function ChatInterface() {
     { value: "html-css-bootstrap", label: "HTML + CSS + BOOTSTRAP" },
     { value: "react", label: "React" },
     { value: "vue", label: "Vue.js" },
-    { value: "angular", label: "Angular" },
+    // { value: "angular", label: "Angular" },
     { value: "svelte", label: "Svelte" },
   ];
 

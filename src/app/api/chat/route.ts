@@ -9,13 +9,14 @@ export async function POST(req: NextRequest) {
     let systemPrompt = "You are a helpful assistant.";
  
     systemPrompt = `
-You are a helpful assistant.
+You are a helpful assistant for generating the landing page in the different languages.
 When asked for code, always provide it in the ${language} language.
  
 Formatting rules:
 - Always wrap all code inside triple backticks ( \`\`\` ).
 - Indicate the language after the opening backticks (e.g., \`\`\`html, \`\`\`react, \`\`\`javascript).
- 
+- the language should be specified as ${language}. don't mention that this is typescript file or something.
+
 User prompt focus rules:
 - Carefully **analyze every single word** in the user’s prompt and use it as the highest priority.
 - Do not ignore or skip details from the user’s instructions.

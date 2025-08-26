@@ -4,6 +4,7 @@ import {
   SandpackPreview,
   SandpackLayout,
 } from "@codesandbox/sandpack-react";
+import { Console } from "console";
 
 type Props = {
   framework: string;
@@ -12,6 +13,8 @@ type Props = {
 
 export default function CodePreview({ framework, code }: Props) {
   let template: "react" | "vue" | "angular" | "svelte" | "static" = "static";
+  
+  console.log(template, "TEMP", framework)
 
   switch (framework) {
     case "react":
@@ -34,9 +37,9 @@ export default function CodePreview({ framework, code }: Props) {
 
   let entryFile = "/App.js";
   if (template === "static") entryFile = "/index.html";
-  if (template === "vue") entryFile = "/App.vue";
+  if (template === "vue") entryFile = "/src/App.vue";
   if (template === "svelte") entryFile = "/App.svelte";
-  if (template === "angular") entryFile = "/app.component.ts";
+  if (template === "angular") entryFile = "/src/app/app.component.ts";
 
   return (
     <div className="h-full w-full flex flex-col bg-white">
